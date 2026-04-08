@@ -1,0 +1,331 @@
+<!DOCTYPE html>
+<html lang="pt-br">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <meta name="theme-color" content="#2c3e50">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+    <title>SGM - Gestão de Aluguéis</title>
+
+    <link rel="manifest" href='data:application/json,{"name":"SGM Gestão","short_name":"SGM","start_url":".","display":"standalone","background_color":"#f4f7f6","theme_color":"#2c3e50","icons":[{"src":"https://cdn-icons-png.flaticon.com/512/1055/1055644.png","sizes":"512x512","type":"image/png"}]}'>
+
+    <style>
+        :root { --primary: #2c3e50; --secondary: #27ae60; --danger: #e74c3c; --bg: #f4f7f6; --accent: #2980b9; --dark: #1a1a1a; }
+        body { font-family: 'Segoe UI', system-ui, sans-serif; background: var(--bg); margin: 0; padding: 10px; color: #333; -webkit-tap-highlight-color: transparent; }
+        
+        /* Interface */
+        #barra-voltar { display: none; position: fixed; top: 0; left: 0; width: 100%; background: #000; color: #fff; padding: 15px; text-align: center; z-index: 99999; }
+        .header-empresa { background: var(--dark); color: white; padding: 15px; border-radius: 8px; margin-bottom: 10px; text-align: center; }
+        #selectEmpresaGlobal { width: 100%; max-width: 300px; padding: 10px; border-radius: 5px; border: none; font-weight: bold; background: var(--secondary); color: white; }
+        
+        .container { max-width: 1100px; margin: auto; background: white; padding: 15px; border-radius: 8px; box-shadow: 0 2px 10px rgba(0,0,0,0.1); }
+        
+        /* Tabs Móveis */
+        .tabs { display: flex; gap: 5px; margin-bottom: 20px; border-bottom: 2px solid #ddd; padding-bottom: 10px; overflow-x: auto; scrollbar-width: none; }
+        .tabs::-webkit-scrollbar { display: none; }
+        .tab-btn { padding: 12px 18px; border: none; background: #eee; border-radius: 5px; cursor: pointer; font-weight: bold; white-space: nowrap; flex-shrink: 0; }
+        .tab-btn.active { background: var(--secondary); color: white; }
+        
+        .section { display: none; }
+        .section.active { display: block; }
+
+        /* Tabelas */
+        .excel-table { width: 100%; border-collapse: collapse; margin-top: 15px; font-size: 13px; border: 1px solid #333; }
+        .excel-table th { background: #e2e2e2 !important; border: 1px solid #999; padding: 10px; text-align: left; color: #000; }
+        .excel-table td { border: 1px solid #ccc; padding: 8px; }
+        .row-subtotal { background: #f8f9fa !important; font-weight: bold; color: var(--accent); }
+        .row-total-geral { background: var(--dark) !important; color: white !important; font-weight: bold; }
+
+        /* Formulários */
+        label { display: block; font-weight: bold; margin: 10px 0 5px; font-size: 13px; }
+        input, select { width: 100%; padding: 12px; border: 1px solid #ccc; border-radius: 6px; box-sizing: border-box; font-size: 16px; margin-bottom: 10px; }
+        .btn { width: 100%; padding: 15px; border: none; border-radius: 6px; font-weight: bold; cursor: pointer; display: block; text-align: center; text-decoration: none; }
+        .btn-main { background: var(--secondary); color: white; }
+        .btn-print { background: var(--primary); color: white; margin-top: 10px; }
+        .btn-danger { background: var(--danger); color: white; padding: 5px 10px; font-size: 11px; width: auto; display: inline-block; }
+        .btn-reajuste { background: var(--accent); color: white; padding: 5px 10px; font-size: 11px; width: auto; display: inline-block; margin-right: 5px; }
+
+        .filtro-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; background: #eee; padding: 15px; border-radius: 8px; margin-bottom: 20px; }
+
+        /* Impressão PDF */
+        @media print {
+            body { background: white !important; padding: 0; }
+            .no-print, .tabs, .header-empresa, #barra-voltar, .btn-danger, .btn-reajuste, .btn { display: none !important; }
+            .container { box-shadow: none !important; border: none !important; width: 100% !important; max-width: none !important; margin: 0 !important; }
+            .section { display: none; }
+            #sec-relatorio { display: block !important; }
+            .excel-table { font-size: 10pt; width: 100%; }
+            .excel-table th, .excel-table td { border: 1px solid #000 !important; }
+        }
+    </style>
+</head>
+<body>
+
+    <div id="barra-voltar" class="no-print">
+        <button onclick="sairImpressao()" style="background:var(--danger); color:white; padding:10px 20px; border:none; border-radius:5px; font-weight:bold;">SAIR DA IMPRESSÃO</button>
+    </div>
+
+    <div class="header-empresa no-print">
+        <small>SISTEMA DE GESTÃO - CARTEIRA:</small><br>
+        <select id="selectEmpresaGlobal" onchange="mudarCarteira()"></select>
+    </div>
+
+    <div class="container">
+        <div class="tabs no-print">
+            <button class="tab-btn active" id="btn-pagamentos" onclick="irPara('pagamentos')">💰 Lançar</button>
+            <button class="tab-btn" id="btn-relatorio" onclick="irPara('relatorio')">📊 Auditoria</button>
+            <button class="tab-btn" id="btn-inquilinos" onclick="irPara('inquilinos')">👥 Inquilinos</button>
+            <button class="tab-btn" id="btn-config" onclick="irPara('config')">⚙️ App</button>
+        </div>
+
+        <div id="sec-pagamentos" class="section active">
+            <h3>Registar Recebimento</h3>
+            <label>Inquilino:</label><select id="formInq"></select>
+            <label>Mês de Referência:</label><input type="month" id="formMes">
+            <label>Tipo de Taxa:</label>
+            <select id="formTaxa" onchange="toggleTaxaCustom()">
+                <option value="0.05">Gestão Mensal (5%)</option>
+                <option value="0.50">Renovação Contrato (50%)</option>
+                <option value="1.00">Primeiro Mês (100%)</option>
+                <option value="custom">Outra Percentagem</option>
+            </select>
+            <input type="number" id="formTaxaCustom" style="display:none;" placeholder="Ex: 10 para 10%">
+            <button class="btn btn-main" onclick="salvarPagamento()">💾 CONFIRMAR PAGAMENTO</button>
+        </div>
+
+        <div id="sec-relatorio" class="section">
+            <div class="no-print filtro-grid">
+                <div><label>Ano:</label><select id="filtroAno" onchange="renderRelatorio()"></select></div>
+                <div><label>Mês:</label>
+                    <select id="filtroMes" onchange="renderRelatorio()">
+                        <option value="todos">Ver Ano Inteiro</option>
+                        <option value="01">Jan</option><option value="02">Fev</option><option value="03">Mar</option>
+                        <option value="04">Abr</option><option value="05">Mai</option><option value="06">Jun</option>
+                        <option value="07">Jul</option><option value="08">Ago</option><option value="09">Set</option>
+                        <option value="10">Out</option><option value="11">Nov</option><option value="12">Dez</option>
+                    </select>
+                </div>
+                <div style="grid-column: span 2;"><label>Filtrar Nome:</label><select id="filtroInq" onchange="renderRelatorio()"></select></div>
+                <button class="btn btn-print" style="grid-column: span 2;" onclick="executarImpressao()">🖨️ IMPRIMIR / GERAR PDF</button>
+            </div>
+            
+            <div id="printableArea">
+                <h2 style="text-align:center;">Relatório de Auditoria</h2>
+                <p id="subtituloRelatorio" style="text-align:center; font-weight:bold;"></p>
+                <table class="excel-table">
+                    <thead>
+                        <tr>
+                            <th>Inquilino</th>
+                            <th>Mês</th>
+                            <th>Bruto</th>
+                            <th>Taxa</th>
+                            <th>Líquido</th>
+                            <th class="no-print">Ações</th>
+                        </tr>
+                    </thead>
+                    <tbody id="corpoAuditoria"></tbody>
+                    <tfoot>
+                        <tr class="row-total-geral">
+                            <td colspan="4" style="text-align:right">TOTAL LÍQUIDO GERAL:</td>
+                            <td id="totalGeral" colspan="2">€ 0,00</td>
+                        </tr>
+                    </tfoot>
+                </table>
+            </div>
+        </div>
+
+        <div id="sec-inquilinos" class="section">
+            <h3>Inquilinos na Carteira</h3>
+            <div class="no-print" style="background:#eee; padding:15px; border-radius:8px; margin-bottom:15px;">
+                <label>Nome Completo / Sala:</label><input type="text" id="inqNome">
+                <label>Valor Mensal do Aluguer:</label><input type="number" id="inqValor" step="0.01">
+                <button class="btn btn-main" onclick="addInquilino()">➕ CADASTRAR</button>
+            </div>
+            <table class="excel-table">
+                <thead><tr><th>Nome</th><th>Valor Atual</th><th>Ações</th></tr></thead>
+                <tbody id="listaInq"></tbody>
+            </table>
+        </div>
+
+        <div id="sec-config" class="section">
+            <h3>⚙️ Gestão da App</h3>
+            <label>Criar Nova Imobiliária/Carteira:</label>
+            <input type="text" id="novaEmpresaNome" placeholder="Ex: Carteira Sul">
+            <button class="btn btn-main" onclick="addEmpresa()">➕ CRIAR CARTEIRA</button>
+            <div id="listaEmpresasUI" style="margin-top:20px;"></div>
+            <hr>
+            <h3>💾 Segurança de Dados</h3>
+            <button class="btn" style="background:#8e44ad; color:white;" onclick="fazerBackup()">📤 EXPORTAR BACKUP (JSON)</button>
+            <p style="font-size:12px; color:gray;">* Guarde o backup regularmente. Os dados ficam salvos apenas neste navegador.</p>
+            <button class="btn" style="background:var(--danger); color:white; margin-top:20px;" onclick="resetTotal()">🗑️ APAGAR TUDO (RESET)</button>
+        </div>
+    </div>
+
+    <script>
+        // Banco de Dados e Inicialização
+        let db = JSON.parse(localStorage.getItem('sgm_v15_prod')) || {
+            empresas: ["Principal"], inquilinos: [], historico: [], ativa: "Principal"
+        };
+
+        const salvar = () => localStorage.setItem('sgm_v15_prod', JSON.stringify(db));
+        const brl = (v) => v.toLocaleString('pt-PT', { style: 'currency', currency: 'EUR' });
+
+        function irPara(id) {
+            document.querySelectorAll('.section').forEach(s => s.classList.remove('active'));
+            document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
+            document.getElementById('sec-' + id).classList.add('active');
+            document.getElementById('btn-' + id).classList.add('active');
+            if(id === 'relatorio') renderRelatorio();
+            if(id === 'inquilinos') renderInquilinos();
+            if(id === 'config') renderEmpresasUI();
+            atualizarSelects();
+        }
+
+        // --- FUNCIONALIDADES CORE ---
+        function toggleTaxaCustom() {
+            document.getElementById('formTaxaCustom').style.display = (document.getElementById('formTaxa').value === 'custom' ? 'block' : 'none');
+        }
+
+        function fazerBackup() {
+            const dataStr = "data:text/json;charset=utf-8," + encodeURIComponent(JSON.stringify(db));
+            const downloadAnchorNode = document.createElement('a');
+            downloadAnchorNode.setAttribute("href", dataStr);
+            downloadAnchorNode.setAttribute("download", "backup_aluguer_" + new Date().toISOString().slice(0,10) + ".json");
+            document.body.appendChild(downloadAnchorNode);
+            downloadAnchorNode.click();
+            downloadAnchorNode.remove();
+        }
+
+        function executarImpressao() {
+            document.body.classList.add('modo-impressao');
+            window.print();
+            setTimeout(() => document.body.classList.remove('modo-impressao'), 1000);
+        }
+
+        // --- GESTÃO DE DADOS ---
+        function mudarCarteira() { db.ativa = document.getElementById('selectEmpresaGlobal').value; salvar(); irPara('pagamentos'); }
+
+        function addEmpresa() {
+            const n = document.getElementById('novaEmpresaNome').value.trim();
+            if(n) { db.empresas.push(n); salvar(); renderEmpresasUI(); atualizarSelects(); document.getElementById('novaEmpresaNome').value=""; }
+        }
+
+        function renderEmpresasUI() {
+            document.getElementById('listaEmpresasUI').innerHTML = db.empresas.map(e => `
+                <div style="display:flex; justify-content:space-between; padding:12px; border-bottom:1px solid #eee; background:#fff; align-items:center;">
+                    <strong>${e}</strong>
+                    ${db.empresas.length > 1 ? `<button class="btn-danger" onclick="removerEmpresa('${e}')">Eliminar</button>` : ''}
+                </div>`).join('');
+        }
+
+        function removerEmpresa(n) { if(confirm("Eliminar carteira e todos os seus dados?")) { db.empresas = db.empresas.filter(e => e !== n); db.ativa = db.empresas[0]; salvar(); location.reload(); } }
+
+        function addInquilino() {
+            const n = document.getElementById('inqNome').value;
+            const v = parseFloat(document.getElementById('inqValor').value);
+            if(n && v) { db.inquilinos.push({ id: Date.now(), nome: n, valor: v, empresa: db.ativa }); salvar(); renderInquilinos(); document.getElementById('inqNome').value=""; document.getElementById('inqValor').value=""; }
+        }
+
+        function renderInquilinos() {
+            const lista = db.inquilinos.filter(i => i.empresa === db.ativa);
+            document.getElementById('listaInq').innerHTML = lista.map(i => `
+                <tr>
+                    <td>${i.nome}</td>
+                    <td>${brl(i.valor)}</td>
+                    <td>
+                        <button class="btn-reajuste" onclick="reajusteRapido(${i.id})">📈 Reajuste</button>
+                        <button class="btn-danger" onclick="delInq(${i.id})">❌</button>
+                    </td>
+                </tr>`).join('');
+        }
+
+        function reajusteRapido(id) {
+            const extra = parseFloat(prompt("Valor a adicionar ao aluguer mensal:"));
+            if(!isNaN(extra)) { db.inquilinos = db.inquilinos.map(i => i.id === id ? {...i, valor: i.valor + extra} : i); salvar(); renderInquilinos(); }
+        }
+
+        function delInq(id) { if(confirm("Eliminar inquilino?")) { db.inquilinos = db.inquilinos.filter(i => i.id !== id); salvar(); renderInquilinos(); } }
+
+        function salvarPagamento() {
+            const id = document.getElementById('formInq').value;
+            const mes = document.getElementById('formMes').value;
+            if(!id || !mes) return alert("Preencha todos os campos.");
+            
+            const inq = db.inquilinos.find(i => i.id == id);
+            let p = document.getElementById('formTaxa').value;
+            let perc = (p === 'custom') ? (parseFloat(document.getElementById('formTaxaCustom').value) || 0) / 100 : parseFloat(p);
+            
+            db.historico.push({
+                id: Date.now(), inqId: inq.id, nome: inq.nome, 
+                bruto: inq.valor, taxa: inq.valor * perc, 
+                liq: inq.valor - (inq.valor * perc), 
+                mes, ano: mes.split('-')[0], empresa: db.ativa
+            });
+            
+            salvar(); alert("Lançamento efetuado!"); irPara('relatorio');
+        }
+
+        function renderRelatorio() {
+            const fAno = document.getElementById('filtroAno').value;
+            const fMes = document.getElementById('filtroMes').value;
+            const fInq = document.getElementById('filtroInq').value;
+            const corpo = document.getElementById('corpoAuditoria');
+            corpo.innerHTML = "";
+            let totalGeral = 0;
+
+            document.getElementById('subtituloRelatorio').innerText = `${db.ativa} | Período: ${fMes==='todos' ? fAno : fMes+'/'+fAno}`;
+
+            let inqs = db.inquilinos.filter(i => i.empresa === db.ativa);
+            if(fInq !== 'todos') inqs = inqs.filter(i => i.id == fInq);
+
+            inqs.forEach(inq => {
+                let subtotalLiq = 0;
+                let meses = fMes === 'todos' ? Array.from({length: 12}, (_, i) => (i + 1).toString().padStart(2, '0')) : [fMes];
+                
+                meses.forEach(m => {
+                    const ref = `${fAno}-${m}`;
+                    const pgs = db.historico.filter(h => h.inqId == inq.id && h.mes === ref && h.empresa === db.ativa);
+                    
+                    if(pgs.length > 0) {
+                        pgs.forEach(p => {
+                            subtotalLiq += p.liq; totalGeral += p.liq;
+                            corpo.innerHTML += `<tr><td>${p.nome}</td><td>${m}/${fAno}</td><td>${brl(p.bruto)}</td><td style="color:var(--danger)">-${brl(p.taxa)}</td><td><strong>${brl(p.liq)}</strong></td><td class="no-print"><button class="btn-danger" onclick="delHist(${p.id})">🗑️</button></td></tr>`;
+                        });
+                    } else {
+                        corpo.innerHTML += `<tr style="background:#fffafa; color:#999"><td>${inq.nome}</td><td>${m}/${fAno}</td><td colspan="3">⚠️ Pendente</td><td class="no-print"></td></tr>`;
+                    }
+                });
+                if(subtotalLiq > 0) {
+                    corpo.innerHTML += `<tr class="row-subtotal"><td colspan="4" style="text-align:right">Total ${inq.nome}:</td><td colspan="2">${brl(subtotalLiq)}</td></tr>`;
+                }
+            });
+            document.getElementById('totalGeral').innerText = brl(totalGeral);
+        }
+
+        function delHist(id) { if(confirm("Anular este pagamento?")) { db.historico = db.historico.filter(h => h.id !== id); salvar(); renderRelatorio(); } }
+
+        function atualizarSelects() {
+            document.getElementById('selectEmpresaGlobal').innerHTML = db.empresas.map(e => `<option value="${e}" ${e===db.ativa?'selected':''}>🏢 ${e}</option>`).join('');
+            const inqs = db.inquilinos.filter(i => i.empresa === db.ativa);
+            const optInq = inqs.map(i => `<option value="${i.id}">${i.nome}</option>`).join('');
+            document.getElementById('formInq').innerHTML = optInq;
+            document.getElementById('filtroInq').innerHTML = '<option value="todos">Todos os Inquilinos</option>' + optInq;
+            
+            const anos = [...new Set(db.historico.map(h => h.ano))];
+            const atual = new Date().getFullYear().toString();
+            if(!anos.includes(atual)) anos.push(atual);
+            document.getElementById('filtroAno').innerHTML = anos.sort((a,b)=>b-a).map(a => `<option value="${a}">${a}</option>`).join('');
+        }
+
+        function resetTotal() { if(confirm("CUIDADO: Isto apagará TODOS os dados permanentemente. Continuar?")) { localStorage.clear(); location.reload(); } }
+
+        // Service Worker para PWA (Offline)
+        if ('serviceWorker' in navigator) {
+            navigator.serviceWorker.register('data:application/javascript;base64,c2VsZi5hZGRFdmVudExpc3RlbmVyKCdmZXRjaCcsIGZ1bmN0aW9uKGV2ZW50KSB7IH0pOw==');
+        }
+
+        window.onload = () => { atualizarSelects(); irPara('pagamentos'); };
+    </script>
+</body>
+</html>
