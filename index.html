@@ -54,8 +54,13 @@
 
         <div id="sec-pagamentos" class="section active">
             <h3>Novo Recebimento</h3>
-            <label>Sala/Inquilino:</label><select id="formInq"></select>
-            <label>Mês de Referência:</label><input type="month" id="formMes">
+            <label>Sala/Inquilino:</label>
+            <select id="formInq">
+                <option value="">-- Selecione o Inquilino --</option>
+            </select>
+            
+            <label>Mês de Referência:</label>
+            <input type="month" id="formMes">
             
             <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 10px;">
                 <div>
@@ -71,13 +76,15 @@
             <label>Taxa Administração:</label>
             <select id="formTaxa" onchange="toggleTaxaCustom()">
                 <option value="0.05">Gestão (5%)</option>
+                <option value="0.10">Gestão (10%)</option>
                 <option value="0.50">Renovação (50%)</option>
                 <option value="1.00">1º Aluguer (100%)</option>
                 <option value="custom">Outra %</option>
             </select>
-            <input type="number" id="formTaxaCustom" style="display:none;" placeholder="Ex: 10">
+            <input type="number" id="formTaxaCustom" style="display:none;" placeholder="Ex: 15">
             
             <button class="btn btn-main" onclick="salvarPagamento()">💾 REGISTAR PAGAMENTO</button>
+            <div id="msgSucesso" style="display:none; color: var(--secondary); text-align: center; margin-top: 10px; font-weight: bold;">✅ Registado com sucesso!</div>
         </div>
 
         <div id="sec-relatorio" class="section">
@@ -139,37 +146,39 @@
         function toggleTaxaCustom() { document.getElementById('formTaxaCustom').style.display = (document.getElementById('formTaxa').value === 'custom' ? 'block' : 'none'); }
         
         function salvarPagamento() {
-            const id = document.getElementById('formInq').value;
+            const idInq = document.getElementById('formInq').value;
             const mes = document.getElementById('formMes').value;
             const multa = parseFloat(document.getElementById('formMulta').value) || 0;
             const desconto = parseFloat(document.getElementById('formDesconto').value) || 0;
 
-            if(!id || !mes) return alert("Selecione Sala e Mês");
+            if(!idInq || !mes) return alert("Erro: Selecione o Inquilino e o Mês!");
             
-            const inq = db.inquilinos.find(i => i.id == id);
-            
-            // CÁLCULO ATUALIZADO: (Base + Multa - Desconto)
-            const valorTotalRecebido = inq.valor + multa - desconto;
+            const inq = db.inquilinos.find(i => i.id == idInq);
+            const valorTotalBase = inq.valor + multa - desconto;
             
             let p = document.getElementById('formTaxa').value;
             let perc = (p === 'custom') ? (parseFloat(document.getElementById('formTaxaCustom').value) || 0) / 100 : parseFloat(p);
             
-            // Taxa incide sobre o valor final ajustado
-            const valorTaxa = valorTotalRecebido * perc;
-            const valorLiquido = valorTotalRecebido - valorTaxa;
+            const valorTaxa = valorTotalBase * perc;
+            const valorLiquido = valorTotalBase - valorTaxa;
 
             db.historico.push({ 
                 id: Date.now(), inqId: inq.id, nome: inq.nome, 
-                bruto: valorTotalRecebido, // Este é o valor base ajustado
-                multa: multa, desconto: desconto, taxa: valorTaxa, 
+                bruto: valorTotalBase, multa, desconto, taxa: valorTaxa, 
                 liq: valorLiquido, mes, ano: mes.split('-')[0], empresa: db.ativa 
             });
 
             salvar(); 
-            alert("Registado com sucesso!"); 
+            
+            // Feedback Visual e Limpeza
+            const msg = document.getElementById('msgSucesso');
+            msg.style.display = "block";
+            setTimeout(() => { msg.style.display = "none"; }, 3000);
+
+            // Reseta apenas os campos necessários, mantendo a página
+            document.getElementById('formInq').value = ""; 
             document.getElementById('formMulta').value = "0";
             document.getElementById('formDesconto').value = "0";
-            irPara('relatorio');
         }
 
         function renderRelatorio() {
@@ -217,145 +226,7 @@
         function atualizarSelects() {
             document.getElementById('selectEmpresaGlobal').innerHTML = db.empresas.map(e => `<option value="${e}" ${e===db.ativa?'selected':''}>🏢 ${e}</option>`).join('');
             const inqs = db.inquilinos.filter(i => i.empresa === db.ativa);
-            const optInq = inqs.map(i => `<option value="${i.id}">${i.nome}</option>`).join('');
-            document.getElementById('formInq').innerHTML = optInq;
-            document.getElementById('filtroInq').innerHTML = '<option value="todos">Todas as Salas</option>' + optInq;
-            const anos = [...new Set(db.historico.map(h => h.ano))];
-            const atual = new Date().getFullYear().toString();
-            if(!anos.includes(atual)) anos.push(atual);
-            document.getElementById('filtroAno').innerHTML = anos.sort((a,b)=>b-a).map(a => `<option value="${a}">${a}</option>`).join('');
-        }
-
-        function fazerBackup() { const blob = new Blob([JSON.stringify(db)], {type: "application/json"}); const url = URL.createObjectURL(blob); const a = document.createElement('a'); a.href = url; a.download = "SGM_Backup.json"; a.click(); }
-        function importarBackup(event) { const file = event.target.files[0]; if (!file) return; const reader = new FileReader(); reader.onload = (e) => { try { db = JSON.parse(e.target.result); salvar(); location.reload(); } catch { alert("Erro!"); } }; reader.readAsText(file); }
-        function resetTotal() { if(confirm("Apagar tudo?")) { localStorage.clear(); location.reload(); } }
-
-        window.onload = () => {
-            const agora = new Date();
-            const mesCorrente = agora.toISOString().substring(0, 7);
-            document.getElementById('formMes').value = mesCorrente;
-            atualizarSelects();
-            irPara('pagamentos');
-        };
-    </script>
-</body>
-</html>
-            <table class="excel-table">
-                <thead><tr><th>Sala</th><th>Valor Aluguer</th><th>Ações</th></tr></thead>
-                <tbody id="listaInq"></tbody>
-            </table>
-        </div>
-
-        <div id="sec-config" class="section">
-            <h3>⚙️ Carteiras e Backup</h3>
-            <input type="text" id="novaEmpresaNome" placeholder="Nome da Carteira">
-            <button class="btn btn-main" onclick="addEmpresa()">➕ CRIAR CARTEIRA</button>
-            <div id="listaEmpresasUI" style="margin-top:15px;"></div>
-            <hr style="margin:20px 0;">
-            <button class="btn" style="background:#8e44ad; color:white; margin-bottom:10px;" onclick="fazerBackup()">📤 EXPORTAR BACKUP</button>
-            <label style="background:var(--accent); color:white; padding:15px; border-radius:6px; text-align:center; cursor:pointer; display:block; font-weight:bold;">📥 IMPORTAR BACKUP<input type="file" onchange="importarBackup(event)" style="display:none;"></label>
-            <button class="btn" style="background:var(--danger); color:white; margin-top:30px; font-size:11px;" onclick="resetTotal()">🗑️ APAGAR TUDO</button>
-        </div>
-    </div>
-
-    <script>
-        let db = JSON.parse(localStorage.getItem('sgm_v19_final')) || { empresas: ["Principal"], inquilinos: [], historico: [], ativa: "Principal" };
-        const salvar = () => localStorage.setItem('sgm_v19_final', JSON.stringify(db));
-        const eur = (v) => v.toLocaleString('pt-PT', { style: 'currency', currency: 'EUR' });
-
-        function irPara(id) {
-            document.querySelectorAll('.section').forEach(s => s.classList.remove('active'));
-            document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
-            document.getElementById('sec-' + id).classList.add('active');
-            document.getElementById('btn-' + id).classList.add('active');
-            if(id === 'relatorio') renderRelatorio();
-            if(id === 'inquilinos') renderInquilinos();
-            if(id === 'config') renderEmpresasUI();
-            atualizarSelects();
-        }
-
-        function toggleTaxaCustom() { document.getElementById('formTaxaCustom').style.display = (document.getElementById('formTaxa').value === 'custom' ? 'block' : 'none'); }
-        
-        function salvarPagamento() {
-            const id = document.getElementById('formInq').value;
-            const mes = document.getElementById('formMes').value;
-            const multa = parseFloat(document.getElementById('formMulta').value) || 0;
-            const desconto = parseFloat(document.getElementById('formDesconto').value) || 0;
-
-            if(!id || !mes) return alert("Selecione Sala e Mês");
-            
-            const inq = db.inquilinos.find(i => i.id == id);
-            
-            // CÁLCULO ATUALIZADO: (Base + Multa - Desconto)
-            const valorTotalRecebido = inq.valor + multa - desconto;
-            
-            let p = document.getElementById('formTaxa').value;
-            let perc = (p === 'custom') ? (parseFloat(document.getElementById('formTaxaCustom').value) || 0) / 100 : parseFloat(p);
-            
-            // Taxa incide sobre o valor final ajustado
-            const valorTaxa = valorTotalRecebido * perc;
-            const valorLiquido = valorTotalRecebido - valorTaxa;
-
-            db.historico.push({ 
-                id: Date.now(), inqId: inq.id, nome: inq.nome, 
-                bruto: valorTotalRecebido, // Este é o valor base ajustado
-                multa: multa, desconto: desconto, taxa: valorTaxa, 
-                liq: valorLiquido, mes, ano: mes.split('-')[0], empresa: db.ativa 
-            });
-
-            salvar(); 
-            alert("Registado com sucesso!"); 
-            document.getElementById('formMulta').value = "0";
-            document.getElementById('formDesconto').value = "0";
-            irPara('relatorio');
-        }
-
-        function renderRelatorio() {
-            const fAno = document.getElementById('filtroAno').value;
-            const fMes = document.getElementById('filtroMes').value;
-            const fInq = document.getElementById('filtroInq').value;
-            const corpo = document.getElementById('corpoAuditoria');
-            corpo.innerHTML = "";
-            let totalGeralLiq = 0;
-            document.getElementById('subtituloRelatorio').innerText = `${db.ativa} (${fMes==='todos'?fAno:fMes+'/'+fAno})`;
-
-            let inqs = db.inquilinos.filter(i => i.empresa === db.ativa);
-            if(fInq !== 'todos') inqs = inqs.filter(i => i.id == fInq);
-
-            inqs.forEach(inq => {
-                let sBruto = 0, sTaxa = 0, sLiq = 0;
-                let meses = fMes === 'todos' ? Array.from({length: 12}, (_, i) => (i + 1).toString().padStart(2, '0')) : [fMes];
-                meses.forEach(m => {
-                    const ref = `${fAno}-${m}`;
-                    const pgs = db.historico.filter(h => h.inqId == inq.id && h.mes === ref && h.empresa === db.ativa);
-                    if(pgs.length > 0) {
-                        pgs.forEach(p => {
-                            sBruto += p.bruto; sTaxa += p.taxa; sLiq += p.liq; totalGeralLiq += p.liq;
-                            corpo.innerHTML += `<tr><td>${p.nome}</td><td>${m}/${fAno}</td><td>${eur(p.bruto)}</td><td style="color:red">-${eur(p.taxa)}</td><td>${eur(p.liq)}</td><td class="no-print"><button class="btn-danger" onclick="delHist(${p.id})">🗑️</button></td></tr>`;
-                        });
-                    } else {
-                        corpo.innerHTML += `<tr class="row-pendente"><td>${inq.nome}</td><td>${m}/${fAno}</td><td colspan="3">⚠️ Pendente</td><td class="no-print"></td></tr>`;
-                    }
-                });
-                if(sLiq > 0) corpo.innerHTML += `<tr class="row-subtotal"><td colspan="2" style="text-align:right">SUBTOTAL:</td><td>${eur(sBruto)}</td><td style="color:red">-${eur(sTaxa)}</td><td colspan="2">${eur(sLiq)}</td></tr>`;
-            });
-            document.getElementById('totalGeral').innerText = eur(totalGeralLiq);
-        }
-
-        function addEmpresa() { const n = document.getElementById('novaEmpresaNome').value.trim(); if(n) { db.empresas.push(n); salvar(); renderEmpresasUI(); atualizarSelects(); document.getElementById('novaEmpresaNome').value=""; } }
-        function renderEmpresasUI() { document.getElementById('listaEmpresasUI').innerHTML = db.empresas.map(e => `<div style="display:flex; justify-content:space-between; padding:10px; border-bottom:1px solid #eee; background:#fff; margin-bottom:5px; border-radius:5px; align-items:center;"><strong>${e}</strong> ${db.empresas.length > 1 ? `<button class="btn-danger" onclick="removerEmpresa('${e}')">X</button>` : ''}</div>`).join(''); }
-        function removerEmpresa(n) { if(confirm("Apagar carteira?")) { db.empresas = db.empresas.filter(e => e !== n); db.ativa = db.empresas[0]; salvar(); location.reload(); } }
-        function addInquilino() { const n = document.getElementById('inqNome').value; const v = parseFloat(document.getElementById('inqValor').value); if(n && v) { db.inquilinos.push({ id: Date.now(), nome: n, valor: v, empresa: db.ativa }); salvar(); renderInquilinos(); document.getElementById('inqNome').value=""; document.getElementById('inqValor').value=""; } }
-        function renderInquilinos() { const lista = db.inquilinos.filter(i => i.empresa === db.ativa); document.getElementById('listaInq').innerHTML = lista.map(i => `<tr><td>${i.nome}</td><td>${eur(i.valor)}</td><td><button class="btn-reajuste" onclick="reajusteRapido(${i.id})">📈</button><button class="btn-danger" onclick="delInq(${i.id})">❌</button></td></tr>`).join(''); }
-        function reajusteRapido(id) { const extra = parseFloat(prompt("Valor a somar:")); if(!isNaN(extra)) { db.inquilinos = db.inquilinos.map(i => i.id === id ? {...i, valor: i.valor + extra} : i); salvar(); renderInquilinos(); } }
-        function delInq(id) { if(confirm("Apagar?")) { db.inquilinos = db.inquilinos.filter(i => i.id !== id); salvar(); renderInquilinos(); } }
-        function delHist(id) { if(confirm("Anular?")) { db.historico = db.historico.filter(h => h.id !== id); salvar(); renderRelatorio(); } }
-        function mudarCarteira() { db.ativa = document.getElementById('selectEmpresaGlobal').value; salvar(); irPara('pagamentos'); }
-        
-        function atualizarSelects() {
-            document.getElementById('selectEmpresaGlobal').innerHTML = db.empresas.map(e => `<option value="${e}" ${e===db.ativa?'selected':''}>🏢 ${e}</option>`).join('');
-            const inqs = db.inquilinos.filter(i => i.empresa === db.ativa);
-            const optInq = inqs.map(i => `<option value="${i.id}">${i.nome}</option>`).join('');
+            const optInq = '<option value="">-- Selecione o Inquilino --</option>' + inqs.map(i => `<option value="${i.id}">${i.nome}</option>`).join('');
             document.getElementById('formInq').innerHTML = optInq;
             document.getElementById('filtroInq').innerHTML = '<option value="todos">Todas as Salas</option>' + optInq;
             const anos = [...new Set(db.historico.map(h => h.ano))];
